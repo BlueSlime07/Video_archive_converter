@@ -56,6 +56,10 @@ sudo pacman -Sy ffmpeg mkvtoolnix
 ```bash
 python converter.py /path/to/Movies
 ```
+or better
+```bash
+converter.py /path/to/Movies
+```
 
 Example:
 
