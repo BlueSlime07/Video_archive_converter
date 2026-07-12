@@ -8,6 +8,14 @@ import shutil
 CRF = 20
 PRESET = "slow"
 
+RED     = "\033[31m"
+GREEN   = "\033[32m"
+YELLOW  = "\033[33m"
+BLUE    = "\033[34m"
+MAGENTA = "\033[35m"
+CYAN    = "\033[36m"
+RESET   = "\033[0m"
+
 VIDEO_EXTENSIONS = {
     ".3gp",
     ".asf",
@@ -192,19 +200,19 @@ def main():
     input_dir = Path(sys.argv[1]).resolve()
 
     if not input_dir.exists():
-        cerr(f"Error: '{input_dir}' does not exist.")
+        cerr(f"{RED}Error: '{input_dir}' does not exist.{RESET}")
         sys.exit(1)
 
     if not input_dir.is_dir():
-        cerr(f"Error: '{input_dir}' is not a directory.")
+        cerr(f"{RED}Error: '{input_dir}' is not a directory.{RESET}")
         sys.exit(1)
     
     if shutil.which("ffmpeg") is None:
-        cerr("ffmpeg not found")
+        cerr(f"{RED}ffmpeg not found.{RESET}")
         sys.exit(1)
 
     if shutil.which("mkvmerge") is None:
-        cerr("mkvmerge not found")
+        cerr(f"{RED}mkvmerge not found{RESET}")
         sys.exit(1)
 
     files = scan_files(input_dir)
@@ -212,12 +220,12 @@ def main():
     failed = 0
     failed_files=[]
 
-    print(f"Found {len(files)} file(s).")
+    print(f"{BLUE}Found {len(files)} file(s).{RESET}")
 
     videos = filter_videos(files)
-    print(f"Found {len(videos)} video(s).")
+    print(f"{BLUE}Found {len(videos)} video(s).{RESET}")
     output_dir = create_output_directory(input_dir)
-    print(f"output directory: {output_dir}")
+    print(f"{BLUE}output directory: {output_dir}{RESET}")
     print()
 
     for index, video in enumerate(videos, start=1):
@@ -227,24 +235,24 @@ def main():
             output_dir,
             video,
         )
-        print(f"[{index}/{len(videos)}] {video.relative_to(input_dir)}")
+        print(f"{YELLOW}\n\n[{index}/{len(videos)}] {video.relative_to(input_dir)}\n\n{RESET}")
 
         if not encode_video(video, TMP_FILE):
-            cerr(f"Failed to encode: {video}")
+            cerr(f"{RED}Failed to encode: {video}{RESET}")
             failed+=1
             failed_files.append(video.relative_to(input_dir))
             continue
         if not mux_video(TMP_FILE, video, output_path):
-            cerr(f"Failed to mux: {video}")
+            cerr(f"{RED}Failed to mux: {video}{RESET}")
             failed+=1
             failed_files.append(video.relative_to(input_dir))
             continue
         success+=1
 
     if TMP_FILE.exists():TMP_FILE.unlink()
-    print(f"\nDone.\nSuccess: {success}\nFailed: {failed}")
+    print(f"\n\n{GREEN}Done.\nSuccess: {success}{RESET}{RED}\nFailed: {failed}{RESET}")
     if failed:
-        cerr("Failed file:")
+        cerr(f"{RED}Failed file:{RESET}")
         for file in failed_files:
             cerr(f"\t{file}")
 
