@@ -4,6 +4,8 @@ from pathlib import Path
 import sys
 import subprocess
 import shutil
+import hashlib
+import pickle as pk
 
 CRF = 20
 PRESET = "slow"
@@ -71,6 +73,11 @@ def print_error(*orgs):
     print(RED,end="",file=sys.stderr)
     print(*orgs,end="", file=sys.stderr)
     print(RESET, file=sys.stderr)
+
+def print_red(*orgs):
+    print(RED,end="")
+    print(*orgs,end="")
+    print(RESET)
 
 def scan_files(input_dir: Path) -> list[Path]:
     """
@@ -160,26 +167,19 @@ def encode_video(input_file: Path, tmp_file: Path) -> bool:
 
         "-y",
 
-        "-i",
-        str(input_file),
+        "-i", str(input_file),
 
-        "-map",
-        "0:v:0",
+        "-map", "0:v:0",
 
-        "-c:v",
-        "libx264",
+        "-c:v", "libx264",
 
-        "-preset",
-        PRESET,
+        "-preset", PRESET,
 
-        "-crf",
-        str(CRF),
+        "-crf", str(CRF),
 
-        "-vf",
-        "scale=-2:720",
+        "-vf", "scale=-2:720",
 
-        "-pix_fmt",
-        "yuv420p",
+        "-pix_fmt", "yuv420p",
 
         str(tmp_file),
     ]
@@ -216,7 +216,7 @@ def mux_video(tmp_file: Path, original_file: Path, output_file: Path,) -> bool:
 
     return result.returncode == 0
 
-def copy_other_files(other_files: list[Path], input_dir: Path, output_dir: Path)->None:
+def copy_other_files(other_files: list[Path], input_dir: Path, output_dir: Path, state:dict, state_file:Path, state_file_temp:Path)->None:
     """
     It copies all files that are not videos.
     """
@@ -243,26 +243,52 @@ def copy_other_files(other_files: list[Path], input_dir: Path, output_dir: Path)
             shutil.copy2(file,output_path)
             print()
             success+=1
+            state["output_others"].append(file.relative_to(input_dir))
+            f = state_file_temp.open('wb')
+            pk.dump(state, f)
+            f.close()
+            shutil.copy2(state_file_temp,state_file)
+            state_file_temp.unlink()
         except OSError as e:
             print_error(f"\terror to copy {file} to {output_path}")
             print_error(f"\terror: \n{e}")
             failed+=1
             failed_files.append(file)
+            state["copy_failed"].append(file.relative_to(input_dir))
+            f = state_file_temp.open('wb')
+            pk.dump(state, f)
+            f.close()
+            shutil.copy2(state_file_temp,state_file)
+            state_file_temp.unlink()
     print_success(f"\tCopy Done.")
     print_success(f"\tSuccess: {success}")
-    print_error(f"\tFailed: {failed}")
+    print_red(f"\tFailed: {failed}")
     if failed:
         for file in failed_files:
             print_error(f"\t\t{file.relative_to(input_dir.parent)}")
 
+def get_file_hash(filepath: Path, chunk_size: int = 8192) -> str:
+    """for geting hash of files"""
+    sha256 = hashlib.sha256()
+    with filepath.open('rb') as f:
+        for chunk in iter(lambda: f.read(chunk_size), b''):
+            sha256.update(chunk)
+    return sha256.hexdigest()
+
+def del_in_list(In:list,for_remove:list):
+    for i in for_remove:
+        if i in In:
+            In.remove(i)
     
 
 def main():
 
-    if len(sys.argv) != 2:
-        print_error(f"Usage: {sys.argv[0]} <input_directory>")
+    if len(sys.argv) < 2:
+        print_error(f"Invalid input.\ntry: {sys.argv[0]} --help")
         sys.exit(1)
 
+    if("-h" in sys.argv or "--help" in sys.argv):
+        print(f"Usag: {sys.argv[0]} <input_directory> options")
     input_dir = Path(sys.argv[1]).resolve()
 
     if not input_dir.exists():
@@ -280,21 +306,80 @@ def main():
     if shutil.which("mkvmerge") is None:
         print_error(f"mkvmerge not found")
         sys.exit(1)
-
+    print_title("scanning directory..")
     files = scan_files(input_dir)
     success = 0
     failed = 0
     failed_files = []
 
     print_info(f"Found {len(files)} file(s).")
-    other_files = []
-    videos = []
+    other_files: list[Path] = []
+    videos: list[Path] = []
     split_files(files,videos,other_files)
     print_info(f"Found {len(videos)} video(s).")
     output_dir = create_output_directory(input_dir)
     print_info(f"output directory: {output_dir}")
     print()
 
+    state=dict()
+    state_dir = output_dir / ".video_converter"
+    state_dir.mkdir(parents=True, exist_ok=True)
+    state_file = state_dir / "state"
+    state_file_temp = state_dir / "state_tmp"
+
+    print_title("search in state file.")
+    if not state_file.exists():
+        print_info("state file not found.")
+        print_cyan(f"making state file in {state_file.relative_to(output_dir.parent)}")
+        state["state_version"]=1
+        state["input_directory"]=input_dir
+        state["output_directory"]=output_dir
+        state["input_videos"]=dict()
+        for i in videos:
+            state["input_videos"][i.relative_to(input_dir)] = get_file_hash(i)
+        state["input_others"]=dict()
+        for i in other_files:
+            state["input_others"][i.relative_to(input_dir)] = get_file_hash(i)
+        state["output_videos"]=[]
+        state["output_others"]=[]
+        state["encode_failed"]=[]
+        state["copy_failed"]=[]
+        file = state_file.open("wb")
+        pk.dump(state,file=file)
+        file.close()
+    else:
+        print_info(f"state file found in {state_file}")
+        file = state_file.open("rb")
+        pk.load(state,file=file)
+        file.close()
+        state["input_directory"]=input_dir
+        state["output_directory"]=output_dir
+        for_del_in_videos:list[Path]=[]
+        for_del_in_others:list[Path]=[]
+        for video in videos:
+            if not video.relative_to(input_dir) in state["input_videos"].keys():
+                state["input_videos"][video.relative_to(input_dir)] = get_file_hash(video)
+            else:
+                file_hash = get_file_hash(video)
+                if state["input_videos"][video.relative_to(input_dir)] == file_hash and video.relative_to(input_dir) in state["output_videos"]:
+                    for_del_in_videos.append(file)
+                else:
+                    state["input_videos"][video.relative_to(input_dir)] = get_file_hash(video)
+                    continue
+
+        for file in other_files:
+            if not file.relative_to(input_dir) in state["input_others"].keys():
+                state["input_others"][file.relative_to(input_dir)] = get_file_hash(file)
+            else:
+                file_hash = get_file_hash(file)
+                if state["input_others"][file.relative_to(input_dir)] == file_hash and file.relative_to(input_dir) in state["output_others"]:
+                    for_del_in_others.append(file)
+                else:
+                    state["input_others"][file.relative_to(input_dir)] = get_file_hash(file)
+                    continue
+        del_in_list(videos,for_del_in_videos)
+        del_in_list(other_files,for_del_in_others)
+            
     for index, video in enumerate(videos, start=1):
 
         output_path = get_output_path(
@@ -308,21 +393,39 @@ def main():
             print_error(f"Failed to encode: {video}")
             failed+=1
             failed_files.append(video.relative_to(input_dir))
+            state['encode_failed'].append(video)
+            file = state_file_temp.open("wb")
+            pk.dump(state,file)
+            file.close()
+            shutil.copy2(state_file_temp,state_file)
+            state_file_temp.unlink(missing_ok=True)
             continue
         if not mux_video(TMP_FILE, video, output_path):
             print_error(f"Failed to mux: {video}")
             failed+=1
             failed_files.append(video.relative_to(input_dir))
+            state['encode_failed'].append(video)
+            file = state_file_temp.open("wb")
+            pk.dump(state,file)
+            file.close()
+            shutil.copy2(state_file_temp,state_file)
+            state_file_temp.unlink(missing_ok=True)
             continue
         success+=1
+        state["output_videos"].append(video.relative_to(input_dir))
+        file = state_file_temp.open("wb")
+        pk.dump(state,file)
+        file.close()
+        shutil.copy2(state_file_temp,state_file)
+        state_file_temp.unlink(missing_ok=True)
     
     print_cyan(f"Copying other files...")
-    copy_other_files(other_files,input_dir,output_dir)
+    copy_other_files(other_files,input_dir,output_dir,state,state_file,state_file_temp)
     
     if TMP_FILE.exists():TMP_FILE.unlink()
 
     print_success(f"done.\nSuccess: {success}")
-    print_error(f"Faild: {failed}")
+    print_red(f"Faild: {failed}")
 
     if failed:
         print_error(f"Failed file:")
