@@ -144,7 +144,7 @@ Then retry to install video-archive-converter.
 ### Arch Linux
 
 ```bash
-sudo pacman -S ffmpeg mkvtoolnix gpac python
+sudo pacman -S ffmpeg mkvtoolnix-cli gpac python
 ```
 
 ---
