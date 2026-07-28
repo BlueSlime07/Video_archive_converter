@@ -145,7 +145,7 @@ Then retry to install video-archive-converter.
 Download last version on release page and run:
 
 ```bash
-sudo pacman -U video-archive-converter*.pkg.tar.zst
+sudo pacman -U ./video-archive-converter*.pkg.tar.zst
 ```
 
 ---
