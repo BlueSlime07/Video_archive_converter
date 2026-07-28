@@ -142,9 +142,73 @@ Then retry to install video-archive-converter.
 ---
 
 ### Arch Linux
+Download last version on release page and run:
 
 ```bash
 sudo pacman -U video-archive-converter*.pkg.tar.zst
+```
+
+---
+
+## Arch Linux (AUR)
+
+Install with any AUR helper.
+
+### Using yay
+
+```bash
+yay -S video-archive-converter
+```
+
+### Using paru
+
+```bash
+paru -S video-archive-converter
+```
+
+The package depends on:
+
+* Python
+* FFmpeg
+* MKVToolNix
+* GPAC (MP4Box)
+
+These dependencies will be installed automatically by the package manager.
+
+---
+
+## Termux
+
+> **Requirements**
+>
+> * Termux **GitHub** or **F-Droid** version
+> * **x11-repo** enabled
+>
+> The Google Play version of Termux is **not supported**.
+
+Enable the X11 repository:
+
+```bash
+pkg install x11-repo
+pkg update
+```
+
+Then install Video Archive Converter:
+
+```bash
+curl -fsSL https://github.com/BlueSlime07/Video_archive_converter/releases/download/1.0.0/video-archive-converter_termux_installer.sh | bash
+```
+
+The installer will automatically:
+
+* Download the latest Termux package
+* Install it
+* Remove temporary files
+
+Run:
+
+```bash
+video-archive-converter --help
 ```
 
 ---
