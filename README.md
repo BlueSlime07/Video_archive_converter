@@ -196,7 +196,7 @@ pkg update
 Then install Video Archive Converter:
 
 ```bash
-curl -fsSL https://github.com/BlueSlime07/Video_archive_converter/blob/main/termux/video-archive-converter_termux_installer.sh | bash
+curl -fsSL https://raw.githubusercontent.com/BlueSlime07/Video_archive_converter/refs/heads/main/termux/video-archive-converter_termux_installer.sh | bash
 ```
 
 The installer will automatically:
