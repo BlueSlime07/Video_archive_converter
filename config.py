@@ -1,6 +1,6 @@
 from classes import *
 
-CRF = 20
+CRF = 22
 PRESET = "slow"
 
 RED      = "\033[31m"        # Error

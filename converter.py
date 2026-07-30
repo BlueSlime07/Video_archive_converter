@@ -22,7 +22,7 @@ def copy_other_files(other_files: list[Path], input_dir: Path, output_dir: Path,
     total = len(other_files)
     success = 0
     failed = 0
-    failed_files = []
+    failed_files:set[Path] = set()
 
     print_info(f"\t{total} File(s) need to be copied.")
 
@@ -38,15 +38,15 @@ def copy_other_files(other_files: list[Path], input_dir: Path, output_dir: Path,
             shutil.copy2(file,output_path)
             print()
             success+=1
-            state["output_others"].append(file.relative_to(input_dir))
+            state["output_others"].add(file.relative_to(input_dir))
             st.state_write(state, state_file, state_file_temp)
             
         except OSError as e:
             print_error(f"\terror to copy {file} to {output_path}")
             print_error(f"\terror: \n{e}")
             failed+=1
-            failed_files.append(file)
-            state["copy_failed"].append(file.relative_to(input_dir))
+            failed_files.add(file)
+            state["copy_failed"].add(file.relative_to(input_dir))
             st.state_write(state, state_file, state_file_temp)
 
     print_success(f"\tCopy Done.")
@@ -154,8 +154,6 @@ Examples:
         print_error(f"MP4Box not found")
         sys.exit(1)
 
-    
-
     if "--no-copy" in sys.argv or "-n" in sys.argv:
         flag_control.COPY = False
     if "--force-mkv" in sys.argv or "-f" in sys.argv:
@@ -168,11 +166,11 @@ Examples:
     files = scan_files(input_dir)
     success = 0
     failed = 0
-    failed_files = []
+    failed_files = set()
 
     print_info(f"Found {len(files)} file(s).")
-    other_files: list[Path] = []
-    videos: list[Path] = []
+    other_files: set[Path] = set()
+    videos: set[Path] = set()
     split_files(files,videos,other_files)
     print_info(f"Found {len(videos)} video(s).")
     output_dir = create_output_directory(input_dir)
@@ -193,14 +191,41 @@ Examples:
     state=dict()
     state_dir = output_dir / ".video_converter"
     state_dir.mkdir(parents=True, exist_ok=True)
-    state_file = state_dir / "state"
-    state_file_temp = state_dir / "state_tmp"
+    state_file = state_dir / "state.json"
+    state_file_temp = state_dir / "state_tmp.json"
 
     if "--refresh" in sys.argv or '-r' in sys.argv:
         st.state_refresh(state_file,state_file_temp,input_dir)
         exit(0)
 
     print_title("Checking for state file...")
+
+    result = st.state_fix(state_file,state_file_temp)
+    if result == FixError.NoError:
+        result = st.state_validate(state_file)
+
+    match result:
+        case FixError.NoError:
+            pass
+        case FixError.NotFoundError:
+            pass
+
+        case FixError.StateDamaged:
+            print_error("State file is corrupted.")
+            ask_delete_state(state_file, 1)
+
+        case FixError.StateNotSupported:
+            print_error("The legacy state file cannot be read. It may be corrupted or created on an incompatible operating system.")
+            ask_delete_state(state_file, 2)
+
+        case FixError.SchemaError:
+            print_error("Unsupported state file schema detected.")
+            ask_delete_state(state_file, 3)
+
+        case FixError.SemanticError:
+            print_error("Invalid value detected in the state file.")
+            ask_delete_state(state_file, 4)
+
     if not state_file.exists():
         print_info("state file not found.")
         print_cyan(f"Creating state file at {state_file.relative_to(output_dir.parent)}")
@@ -214,7 +239,7 @@ Examples:
     else:
         print_info(f"State file found at {state_file}")
         st.state_refresh(state_file,state_file_temp,input_dir)
-        state = st.state_read(state_file,state_file_temp)
+        state = st.state_read(state_file)
         
         st.merg_whit_scan(state,
                                 state_file,
@@ -224,7 +249,7 @@ Examples:
                                 videos,
                                 other_files,
                                 )
-            
+
     for index, video in enumerate(videos, start=1):
 
         output_path = get_output_path(
@@ -250,32 +275,31 @@ Examples:
                 output_path = output_path.with_suffix(".mkv")
                 print_info(f"Converting {video.relative_to(input_dir)} to MKV")
 
-
         if VIDEO_EXTENSIONS.get(output_path.suffix.lower()) in (ContainerPolicy.MKV,ContainerPolicy.MP4_FAMILY):
             if not encode_video(video, TMP_FILE):
                 print_error(f"Failed to encode: {video}")
                 failed+=1
-                failed_files.append(video.relative_to(input_dir))
-                state['encode_failed'].append(video.relative_to(input_dir))
+                failed_files.add(video.relative_to(input_dir))
+                state['encode_failed'].add(video.relative_to(input_dir))
                 st.state_write(state, state_file, state_file_temp)
                 continue
             if not mux_video(TMP_FILE, video, output_path):
                 print_error(f"Failed to mux: {video}")
                 failed+=1
-                failed_files.append(video.relative_to(input_dir))
-                state['encode_failed'].append(video.relative_to(input_dir))
+                failed_files.add(video.relative_to(input_dir))
+                state['encode_failed'].add(video.relative_to(input_dir))
                 st.state_write(state, state_file, state_file_temp)
                 continue
             else:
-                state["output_videos"].append((video.with_suffix('.mkv') if (flag_control.IN_PLACE and flag_control.FORCE_MKV and not VIDEO_EXTENSIONS[video.suffix] in (ContainerPolicy.MKV, ContainerPolicy.MP4_FAMILY)) else video).relative_to(input_dir))
+                state["output_videos"].add((video.with_suffix('.mkv') if (flag_control.IN_PLACE and flag_control.FORCE_MKV and not VIDEO_EXTENSIONS[video.suffix] in (ContainerPolicy.MKV, ContainerPolicy.MP4_FAMILY)) else video).relative_to(input_dir))
                 st.state_write(state, state_file, state_file_temp)
             
         else:
             if not handle_non_native(input_dir,video,output_path):
                 print_error(f"Failed to copy: {video}")
                 failed+=1
-                failed_files.append(video.relative_to(input_dir))
-                state["copy_failed"].append(video.relative_to(input_dir))
+                failed_files.add(video.relative_to(input_dir))
+                state["copy_failed"].add(video.relative_to(input_dir))
                 st.state_write(state, state_file, state_file_temp)
                 continue
         success+=1
@@ -292,8 +316,6 @@ Examples:
     copy_other_files(other_files,input_dir,output_dir,state,state_file,state_file_temp)
     
     if TMP_FILE.exists():TMP_FILE.unlink()
-
-    
 
 if __name__ == "__main__":
     main()

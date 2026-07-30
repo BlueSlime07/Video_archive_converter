@@ -14,3 +14,12 @@ class ControlModes:
         self.IN_PLACE = False
 
 flag_control = ControlModes()
+
+class FixError(IntEnum):
+    NotFoundError = auto()
+    NoError = auto()
+    StateDamaged = auto()
+    StateNotSupported = auto()
+    SchemaError = auto()
+    SemanticError = auto()
+    

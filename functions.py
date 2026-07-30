@@ -47,29 +47,29 @@ def print_warning(*orgs):
     print(*orgs,end="")
     print(RESET)
 
-def scan_files(input_dir: Path) -> list[Path]:
+def scan_files(input_dir: Path) -> set[Path]:
     """
-    Return a list containing every file inside input_dir recursively.
+    Return a set containing every file inside input_dir recursively.
     """
 
-    files = []
+    files = set()
 
     for path in input_dir.rglob("*"):
         if path.is_file():
-            files.append(path)
+            files.add(path)
 
     return files
 
-def split_files(files: list[Path], videos: list[Path], other_files: list[Path]) -> None:
+def split_files(files: set[Path], videos: set[Path], other_files: set[Path]) -> None:
     """
     Split files into videos and non-video files.
     """
 
     for file in files:
-        if file.suffix.lower() in VIDEO_EXTENSIONS:
-            videos.append(file)
+        if file.suffix.lower() in VIDEO_EXTENSIONS.keys():
+            videos.add(file)
         else:
-            other_files.append(file)
+            other_files.add(file)
 
 
 def create_output_directory(input_dir: Path) -> Path:
@@ -150,6 +150,8 @@ def encode_video(input_file: Path, tmp_file: Path) -> bool:
         "-vf", "scale=-2:720",
 
         "-pix_fmt", "yuv420p",
+
+#        "-progress", "pipe:1",
 
         str(tmp_file),
     ]
@@ -298,6 +300,9 @@ def get_file_hash(filepath: Path,
             sha256.update(chunk)
     return sha256.hexdigest()
 
-def del_in_list(In:list,for_remove:list):
-    remove_set = set(for_remove)
-    In[:] = [x for x in In if x not in remove_set]
+def ask_delete_state(state_file:Path, exit_cod:int):
+    chose = input("Delete it and rebuild it? [y/N] ")
+    if chose in ("","N","n"):
+        sys.exit(exit_cod)
+    elif chose in ('Y','y'):
+        state_file.unlink()
