@@ -93,7 +93,7 @@ Options:
         longer exist in the input or output directories.
     
     -b, --notification
-        bell alart at the end.
+        Play the terminal bell when processing finishes.
 
 Behavior:
     • MKV:
