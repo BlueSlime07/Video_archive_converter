@@ -25,10 +25,11 @@ The project is designed for building standardized video archives suitable for me
   * Track language
   * Track names
   * Default/Forced flags
-* Supports automatic resume using a state file
+* Supports automatic resume with automatic state validation and recovery
 * Processes one file at a time to reduce disk usage
 * Displays conversion progress
 * Reports failed files at the end
+* Optional audible notification when processing finishes
 
 ---
 
@@ -94,15 +95,31 @@ The original directory structure is preserved.
 
 ## Command Line Options
 
-| Option              | Description                                        |
-| ------------------- | -------------------------------------------------- |
-| `-h`, `--help`      | Show help information                              |
-| `-n`, `--no-copy`   | Do not copy non-video files                        |
-| `-f`, `--force-mkv` | Convert unsupported containers to MKV              |
-| `-i`, `--in-place`  | Replace original files after successful conversion |
-| `-r`, `--refresh`   | Refresh the state file                             |
+| Option                 | Description                                                |
+| ---------------------- | ---------------------------------------------------------- |
+| `-h`, `--help`         | Show help information                                      |
+| `-n`, `--no-copy`      | Do not copy non-video files                                |
+| `-f`, `--force-mkv`    | Convert unsupported containers to MKV                      |
+| `-i`, `--in-place`     | Replace original files after successful conversion         |
+| `-r`, `--refresh`      | Refresh the state file                                     |
+|`-r`,  `--notification` | Play a terminal bell notification when processing finishes |
 
 ---
+
+## State File
+
+The converter stores its progress in a UTF-8 encoded JSON state file inside the output directory.
+
+This allows interrupted conversions to continue without reprocessing files that have already been completed.
+
+On startup the converter automatically:
+
+- validates the state file
+- recovers from temporary state files after interrupted executions
+- migrates supported legacy state files to the current format
+- detects corrupted state files and asks before removing them
+
+The `--refresh` option synchronizes the state file with the current contents of the input directory.
 
 ## Requirements
 
@@ -218,31 +235,36 @@ video-archive-converter --help
 Convert an entire directory:
 
 ```bash
-converter.py /path/to/Movies
+video-archive-converter /path/to/Movies
 ```
 
 Convert unsupported containers to MKV:
 
 ```bash
-converter.py Movies --force-mkv
+video-archive-converter Movies --force-mkv
 ```
 
 Replace original files:
 
 ```bash
-converter.py Movies --in-place
+video-archive-converter Movies --in-place
 ```
 
 Skip copying non-video files:
 
 ```bash
-converter.py Movies --no-copy
+video-archive-converter Movies --no-copy
 ```
 
 Refresh the state file:
 
 ```bash
-converter.py Movies --refresh
+video-archive-converter Movies --refresh
+```
+Play a terminal bell notification when processing finishes:
+
+```bash
+video-archive-converter ~/Videos --notification
 ```
 
 ---
@@ -254,8 +276,8 @@ converter.py Movies --refresh
 | Video Codec  | H.264 (libx264) |
 | Resolution   | 720p            |
 | Pixel Format | yuv420p         |
-| Preset       | Configurable    |
-| CRF          | Configurable    |
+| Preset       | slow (default)  |
+| CRF          | 20 (default)    |
 
 ---
 
@@ -279,6 +301,7 @@ The project focuses on:
 * Simple implementation
 * Low memory usage
 * Media server compatibility
+* Crash-resistant operation
 
 ---
 
