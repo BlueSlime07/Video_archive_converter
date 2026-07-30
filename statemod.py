@@ -76,10 +76,7 @@ def state_update_v1_to_v2(state_file:Path,
     state_file_temp.unlink(missing_ok=True)
     return FixError.NoError
     
-def state_validate(state_file:Path)->int:
-    with state_file.open('r',encoding='utf-8') as file:
-        state:dict = json.load(file)
-
+def state_validate_dict(state:dict)->int:
     keys = set(state.keys())
     defult_keys = {"state_version","input_directory","output_directory","input_videos", "input_others","output_videos","output_others","encode_failed","copy_failed"}
 
@@ -119,6 +116,11 @@ def state_validate(state_file:Path)->int:
                 return FixError.SemanticError
 
     return FixError.NoError
+
+def state_validate(state_file:Path)->int:
+    with state_file.open('r',encoding='utf-8') as file:
+        state:dict = json.load(file)
+    return state_validate_dict(state)
             
 def state_fix(state_file:Path,
               state_file_temp:Path,
@@ -127,9 +129,13 @@ def state_fix(state_file:Path,
     if state_file_temp.exists():
         try:
             with state_file_temp.open('r', encoding='utf-8') as file:
-                json.load(file)
-            os.replace(state_file_temp,state_file)
-            result = FixError.NoError
+                state = json.load(file)
+            if state_validate_dict(state) == FixError.NoError:
+                os.replace(state_file_temp,state_file)
+                result = FixError.NoError
+            else:
+                state_file_temp.unlink()
+                result = FixError.NoError
         except (json.JSONDecodeError, OSError):
             state_file_temp.unlink()
             result = FixError.NoError
@@ -246,7 +252,7 @@ def merg_whit_scan(state:dict[str:dict[Path:str]],
         if not input_dir/file in other_files:
             for_del_in_others_history.add(file)
     
-    state["input_videos"].difference_update(for_del_in_videos_history)
+    state["output_videos"].difference_update(for_del_in_videos_history)
     state["output_others"].difference_update(for_del_in_others_history)
 
     for video in videos:
@@ -315,7 +321,7 @@ def state_refresh(state_file:Path,
     split_files(files,videos,others)
 
     for file in state["output_videos"]:
-        if not(state["output_directory"]/file in videos or (state["output_directory"]/file.with_suffix(".mkv") in videos) if VIDEO_EXTENSIONS[file.suffix.lower()] != ContainerPolicy.MP4_FAMILY else False):
+        if not(state["output_directory"]/file in videos or state["output_directory"]/file.with_suffix(".mkv") in videos):
             for_del.add(file)
     
     state["output_videos"].difference_update(for_del)

@@ -40,4 +40,4 @@ VIDEO_EXTENSIONS = {
 }
 
 APP_NAME = "video-archive-converter"
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.0.1"

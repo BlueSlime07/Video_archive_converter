@@ -12,6 +12,7 @@ class ControlModes:
         self.COPY=True
         self.FORCE_MKV = False
         self.IN_PLACE = False
+        self.FINISH_NOTIFICATION = False 
 
 flag_control = ControlModes()
 

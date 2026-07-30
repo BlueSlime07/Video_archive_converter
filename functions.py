@@ -4,6 +4,7 @@ import subprocess
 import shutil
 import hashlib
 import os
+import time
 
 from config import *
 
@@ -306,3 +307,12 @@ def ask_delete_state(state_file:Path, exit_cod:int):
         sys.exit(exit_cod)
     elif chose in ('Y','y'):
         state_file.unlink()
+
+def finish_notification():
+    print('\a',end='',flush=True)
+    time.sleep(0.13)
+    print('\a',end='',flush=True)
+    time.sleep(0.26)
+    print('\a',end='',flush=True)
+    time.sleep(0.13)
+    print('\a',end='',flush=True)

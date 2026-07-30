@@ -91,6 +91,9 @@ Options:
     -r, --refresh
         Refresh the state file by removing entries for files that no
         longer exist in the input or output directories.
+    
+    -b, --notification
+        bell alart at the end.
 
 Behavior:
     • MKV:
@@ -126,6 +129,7 @@ Examples:
     {APP_NAME} Movies --in-place
 
     {APP_NAME} Movies --refresh
+    {APP_NAME} Movies --notification
 """)
         sys.exit(0)
     input_dir = Path(sys.argv[1]).resolve()
@@ -161,6 +165,8 @@ Examples:
     if "--in-place" in sys.argv or '-i' in sys.argv:
         flag_control.IN_PLACE = True
         flag_control.COPY = False
+    if '--notification' in sys.argv or '-b' in sys.argv:
+        flag_control.FINISH_NOTIFICATION = True
 
     print_title("scanning directory..")
     files = scan_files(input_dir)
@@ -216,7 +222,7 @@ Examples:
 
         case FixError.StateNotSupported:
             print_error("The legacy state file cannot be read. It may be corrupted or created on an incompatible operating system.")
-            ask_delete_state(state_file, 2)
+            ask_delete_state(state_file.with_suffix(''), 2)
 
         case FixError.SchemaError:
             print_error("Unsupported state file schema detected.")
@@ -316,6 +322,8 @@ Examples:
     copy_other_files(other_files,input_dir,output_dir,state,state_file,state_file_temp)
     
     if TMP_FILE.exists():TMP_FILE.unlink()
+    if flag_control.FINISH_NOTIFICATION:
+        finish_notification()
 
 if __name__ == "__main__":
     main()
