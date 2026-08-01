@@ -20,6 +20,33 @@ LAST_STATE_VERSION = 2
 def state_update_v1_to_v2(state_file:Path,
                           state_file_temp:Path,
                           ):
+    """
+    Update state file from version 1 to version 2 format.
+
+    Reads the old state file, converts it to the new format with proper
+    structure and JSON serialization, then replaces the old file.
+
+    Version 2 changes:
+        - Adds "state_version" field
+        - Converts Path objects to string paths (.as_posix())
+        - Uses JSON format instead of pickle
+        - Reorganizes data structure
+
+    Args:
+        state_file: Path to the main state file
+        state_file_temp: Path to temporary state file
+
+    Returns:
+        FixError.NoError on success, FixError.StateNotSupported if state
+        cannot be loaded or is corrupted.
+
+    Note:
+        This function handles:
+        - Recovery from temporary file if it exists
+        - Pickle/JSON format conversion
+        - Safe file replacement with atomic operations
+        - Cleanup of old files on success
+    """
     if state_file_temp.exists():
         try:
             with state_file_temp.open('rb') as file:
@@ -77,6 +104,26 @@ def state_update_v1_to_v2(state_file:Path,
     return FixError.NoError
     
 def state_validate_dict(state:dict)->int:
+    """
+    Validate the structure and content of a state dictionary.
+
+    Checks that all required keys exist, values have correct types,
+    and the state version is compatible. Prints warnings for unknown
+    keys and legacy state versions.
+
+    Args:
+        state: The state dictionary to validate.
+
+    Returns:
+        FixError.NoError if validation passes.
+        FixError.SchemaError if structure is invalid.
+        FixError.SemanticError if values have wrong types.
+
+    Required keys:
+        state_version, input_directory, output_directory,
+        input_videos, input_others, output_videos, output_others,
+        encode_failed, copy_failed
+    """
     keys = set(state.keys())
     defult_keys = {"state_version","input_directory","output_directory","input_videos", "input_others","output_videos","output_others","encode_failed","copy_failed"}
 
@@ -118,6 +165,19 @@ def state_validate_dict(state:dict)->int:
     return FixError.NoError
 
 def state_validate(state_file:Path)->int:
+    """
+    Load and validate a state file from disk.
+
+    Reads the JSON state file and passes it to state_validate_dict()
+    for structural validation.
+
+    Args:
+        state_file: Path to the JSON state file.
+
+    Returns:
+        Same as state_validate_dict(): FixError.NoError,
+        FixError.SchemaError, or FixError.SemanticError.
+    """
     with state_file.open('r',encoding='utf-8') as file:
         state:dict = json.load(file)
     return state_validate_dict(state)
@@ -125,6 +185,30 @@ def state_validate(state_file:Path)->int:
 def state_fix(state_file:Path,
               state_file_temp:Path,
               ) -> int:
+    """
+    Attempt to fix or recover a corrupted or legacy state file.
+
+    This function handles multiple recovery scenarios:
+        1. Valid temporary file exists → replace main state file
+        2. Main state file is valid JSON → no action needed
+        3. Main state file is corrupted → try to recover from backup
+        4. Legacy v1 state file exists → convert to v2 format
+
+    Args:
+        state_file: Path to the main state file (.json)
+        state_file_temp: Path to the temporary state file (.json)
+
+    Returns:
+        FixError.NoError if state is valid or successfully recovered.
+        FixError.StateDamaged if state is corrupted and cannot be fixed.
+        FixError.NotFoundError if no valid state file exists.
+
+    Recovery priority:
+        1. Temporary file (if valid) → replace main
+        2. Main file (if valid) → keep as-is
+        3. Corrupted main → try v1 backup conversion
+        4. Legacy v1 file → convert to v2
+    """
     result = FixError.NotFoundError
     if state_file_temp.exists():
         try:
@@ -157,6 +241,31 @@ def state_fix(state_file:Path,
     return result
 
 def state_read(state_file:Path) -> dict:
+    """
+    Read and deserialize a state file from disk.
+
+    Loads the JSON state file and converts all string paths back to Path objects.
+    This is the reverse operation of the state writing function.
+
+    Args:
+        state_file: Path to the JSON state file to read.
+
+    Returns:
+        A dictionary containing the complete state with:
+            - state_version: int
+            - input_directory: Path
+            - output_directory: Path
+            - input_videos: dict[Path, str] (file path → hash)
+            - input_others: dict[Path, str] (file path → hash)
+            - output_videos: set[Path]
+            - output_others: set[Path]
+            - encode_failed: set[Path]
+            - copy_failed: set[Path]
+
+    Note:
+        This function assumes the state file is valid and properly formatted.
+        Call state_validate() before using this function if validation is needed.
+    """
 
     with state_file.open("r",encoding="utf-8") as file:
         state_temp = json.load(file)
@@ -181,6 +290,38 @@ def state_write(state:dict,
                 state_file:Path,
                 state_file_temp:Path,
                 ) -> None:
+    """
+    Write a state dictionary to a JSON file with atomic replacement.
+
+    Converts all Path objects to string paths, serializes to JSON,
+    and atomically replaces the target file using a temporary file.
+
+    Args:
+        state: The state dictionary to write (contains Path objects).
+        state_file: The final destination path for the state file (.json).
+        state_file_temp: Temporary file path used for atomic write operation.
+
+    Note:
+        This function performs an atomic write operation:
+            1. Writes to a temporary file first
+            2. Flushes and fsync() to ensure data is written to disk
+            3. Atomically replaces the target file with os.replace()
+
+        This prevents data corruption if the process is interrupted during writing.
+
+    Structure of the output JSON:
+        {
+            "state_version": int,
+            "input_directory": str,
+            "output_directory": str,
+            "input_videos": {str: str},  # path → hash
+            "input_others": {str: str},  # path → hash
+            "output_videos": [str, ...],  # sorted list of paths
+            "output_others": [str, ...],  # sorted list of paths
+            "encode_failed": [str, ...],  # sorted list of paths
+            "copy_failed": [str, ...]     # sorted list of paths
+        }
+    """
     state_temp = dict()
 
     state_temp["state_version"]=state["state_version"]
@@ -214,22 +355,39 @@ def make_default(state:dict,
                  videos:list[Path],
                  other_files:list[Path],
                  )->None:
+    """
+    Initialize a state dictionary with default values for a new encoding job.
 
-        state["state_version"]=LAST_STATE_VERSION
-        state["input_directory"]=input_dir
-        state["output_directory"]=output_dir
-        state["input_videos"]=dict()
-        for i in videos:
-            state["input_videos"][i.relative_to(input_dir)] = get_file_hash(i)
-        state["input_others"]=dict()
-        for i in other_files:
-            state["input_others"][i.relative_to(input_dir)] = get_file_hash(i)
-        state["output_videos"]=set()
-        state["output_others"]=set()
-        state["encode_failed"]=set()
-        state["copy_failed"]=set()
+    Populates the state with version info, directory paths, and hashes of all
+    input files. Output sets are initialized as empty sets.
 
-def merg_whit_scan(state:dict[str:dict[Path:str]],
+    Args:
+        state: The state dictionary to populate (modified in-place).
+        input_dir: Root input directory path.
+        output_dir: Root output directory path.
+        videos: List of video file paths to process.
+        other_files: List of non-video files to copy (e.g., subtitles, images).
+
+    Note:
+        - File paths are stored relative to input_dir as keys.
+        - File hashes are computed using get_file_hash() for change detection.
+        - All output sets are initialized as empty sets (will be populated later).
+    """
+    state["state_version"]=LAST_STATE_VERSION
+    state["input_directory"]=input_dir
+    state["output_directory"]=output_dir
+    state["input_videos"]=dict()
+    for i in videos:
+        state["input_videos"][i.relative_to(input_dir)] = get_file_hash(i)
+    state["input_others"]=dict()
+    for i in other_files:
+        state["input_others"][i.relative_to(input_dir)] = get_file_hash(i)
+    state["output_videos"]=set()
+    state["output_others"]=set()
+    state["encode_failed"]=set()
+    state["copy_failed"]=set()
+
+def merge_whit_scan(state:dict[str:dict[Path:str]],
                    state_file:Path,
                 state_file_temp:Path,
                 input_dir:Path,
@@ -237,6 +395,32 @@ def merg_whit_scan(state:dict[str:dict[Path:str]],
                 videos:set[Path],
                 other_files:set[Path],
                    ) -> None:
+    """
+    Merge current file system scan results with existing state.
+
+    Updates the state by:
+        1. Removing entries for files that no longer exist
+        2. Adding new files with their hashes
+        3. Skipping unchanged files that are already processed
+        4. Updating hashes for modified files
+
+    Args:
+        state: The state dictionary to update (modified in-place).
+        state_file: Path to the main state file (for writing).
+        state_file_temp: Path to temporary state file (for writing).
+        input_dir: Root input directory path.
+        output_dir: Root output directory path.
+        videos: Set of video files found in current scan.
+        other_files: Set of non-video files found in current scan.
+
+    Note:
+        This function handles three scenarios for each file:
+            - File removed: Remove from state and output sets
+            - File new: Add to state with its hash
+            - File unchanged & processed: Skip (remove from processing list)
+            - File modified: Update hash and reprocess
+    """
+    
     state["input_directory"]=input_dir
     state["output_directory"]=output_dir
     for_del_in_videos:set[Path]=set()
@@ -286,6 +470,37 @@ def state_refresh(state_file:Path,
                   state_file_temp:Path,
                   input_dir:Path,
                   )->dict:
+    """
+    Refresh the state file by synchronizing it with the current file system.
+
+    This function scans both input and output directories, updates the state
+    to reflect the current state of the file system, and writes the updated
+    state back to disk.
+
+    Operations performed:
+        1. Reads the current state from disk
+        2. Scans input directory for videos and other files
+        3. Removes entries for files that no longer exist in input
+        4. Scans output directory for processed files
+        5. Removes entries for files that no longer exist in output
+        6. Updates input/output directory paths
+        7. Writes the refreshed state back to disk
+
+    Args:
+        state_file: Path to the main state file (.json)
+        state_file_temp: Path to the temporary state file (.json)
+        input_dir: Root input directory path (may have changed)
+
+    Returns:
+        The updated state dictionary after refresh.
+
+    Note:
+        This function handles:
+            - Files deleted from input directory
+            - Files deleted from output directory
+            - Output videos with both original extension and .mkv extension
+            - All state modifications are atomic (via state_write)
+    """
     state:dict[str:dict] = state_read(state_file)
     
     state["state_version"]=LAST_STATE_VERSION

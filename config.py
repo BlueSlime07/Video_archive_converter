@@ -3,6 +3,8 @@ from classes import *
 CRF = 22
 PRESET = "slow"
 
+PROGRESS_BAR_WIDTH = 32
+
 RED      = "\033[31m"        # Error
 GREEN    = "\033[32m"        # Success
 YELLOW   = "\033[33m"        # Notice
@@ -40,4 +42,4 @@ VIDEO_EXTENSIONS = {
 }
 
 APP_NAME = "video-archive-converter"
-APP_VERSION = "1.0.1"
+APP_VERSION = "1.1.0"

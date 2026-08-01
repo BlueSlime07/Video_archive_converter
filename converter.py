@@ -158,15 +158,7 @@ Examples:
         print_error(f"MP4Box not found")
         sys.exit(1)
 
-    if "--no-copy" in sys.argv or "-n" in sys.argv:
-        flag_control.COPY = False
-    if "--force-mkv" in sys.argv or "-f" in sys.argv:
-        flag_control.FORCE_MKV = True
-    if "--in-place" in sys.argv or '-i' in sys.argv:
-        flag_control.IN_PLACE = True
-        flag_control.COPY = False
-    if '--notification' in sys.argv or '-b' in sys.argv:
-        flag_control.FINISH_NOTIFICATION = True
+    flag_handler()
 
     print_title("scanning directory..")
     files = scan_files(input_dir)
@@ -200,7 +192,7 @@ Examples:
     state_file = state_dir / "state.json"
     state_file_temp = state_dir / "state_tmp.json"
 
-    if "--refresh" in sys.argv or '-r' in sys.argv:
+    if flag_control.JUST_REFRESH:
         st.state_refresh(state_file,state_file_temp,input_dir)
         exit(0)
 
@@ -247,7 +239,7 @@ Examples:
         st.state_refresh(state_file,state_file_temp,input_dir)
         state = st.state_read(state_file)
         
-        st.merg_whit_scan(state,
+        st.merge_whit_scan(state,
                                 state_file,
                                 state_file_temp,
                                 input_dir,
