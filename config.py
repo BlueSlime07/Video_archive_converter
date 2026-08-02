@@ -1,7 +1,7 @@
 from classes import *
 
 CRF = 22
-PRESET = "slow"
+PRESET = "ultrafast"
 
 PROGRESS_BAR_WIDTH = 32
 

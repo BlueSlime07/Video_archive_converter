@@ -6,6 +6,7 @@ import hashlib
 import os
 import time
 import threading
+import io
 
 from config import *
 
@@ -132,6 +133,8 @@ def progress_bar(full_time:float|None)->None:
         full_time: Total duration of the video in seconds.
     """
     units = ('KB','MB','GB','TB')
+    test = {'/':'-','-':'\\','\\':'|','|':'/'}
+    first = '/'
     if full_time is not None and full_time > 0:
         try:
             runner=0
@@ -144,7 +147,7 @@ def progress_bar(full_time:float|None)->None:
                             progress_state.out_time_ms = full_time *1_000_000
                             progress_state.out_time_s = full_time
                         fill = int(progress_state.out_time_s / full_time * PROGRESS_BAR_WIDTH)
-                        print("\r\033[k Encoding: ["+fill*'█'+(PROGRESS_BAR_WIDTH - fill)*'░'+f"]  {int(progress_state.out_time_s/full_time*100):>3d}%  ⚡ {progress_state.fps:<8.2f} fps │  {progress_state.speed_f:<4.2f}x",end='\033[B')
+                        print("\r\033[k Encoding: ["+fill*'█'+(PROGRESS_BAR_WIDTH - fill)*'░'+f"]  {int(progress_state.out_time_s/full_time*100):>3d}%  ⚡ {progress_state.fps:<8.2f} fps │  {progress_state.speed_f:<4.2f}x    {first}",end='\033[B')
                         size = progress_state.total_size
                         n = 0
                         size =round(size / 1024, 1)
@@ -159,6 +162,7 @@ def progress_bar(full_time:float|None)->None:
                         if ETA_s <0:ETA_s=0
 
                         print(f"\r\033[k Elapsed: {int(progress_state.out_time_s)//3600:02d}:{int(progress_state.out_time_s)//60%60:02d}:{int(progress_state.out_time_s)%60:02d}  │  ETA: {ETA_s//3600:02d}:{ETA_s//60%60:02d}:{ETA_s%60:02d}  │  Frames: {progress_state.frame:<6,d}  │  Size: {size:<6.1f} {units[n]}",end='\033[A',flush=True)
+                        first = test[first]
                         time.sleep(0.1)
                         if progress_state.progress == 'end':
                             runner+=1
@@ -287,7 +291,6 @@ def encode_video(input_file: Path, tmp_file: Path) -> bool:
         True  -> success
         False -> ffmpeg failed
     """
-
     tmp_file.parent.mkdir(parents=True, exist_ok=True)
 
     if tmp_file.exists():
@@ -322,55 +325,75 @@ def encode_video(input_file: Path, tmp_file: Path) -> bool:
     ]
     reset_progress_state()
     bar = threading.Thread(target=progress_bar,args=(get_video_time(input_file),))
-    
     result = subprocess.Popen(
         command,
         stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
         text=True,
         bufsize=1
 
         )
 
+    stderr_buffer = io.StringIO()
     bar.start()
 
-    try:    
-        while progress_state.progress =='continue':
+    while progress_state.progress == 'continue':
+        try:
+            error_code = result.poll()
+            if not error_code is None and error_code != 0:
+                progress_state.progress = 'force_down'
+                stderr_buffer.write(result.stdout.read())
+                break
             line = result.stdout.readline()
-            key, value = str(line).strip().split('=',1)
-            match key:
-                case 'progress':
-                    progress_state.progress=value
+            if not '=' in line:
+                stderr_buffer.write(line)
+            else:
+                key, value = str(line).strip().split('=',1)
+                match key:
+                    case 'progress':
+                        progress_state.progress=value
 
-                case 'frame':
-                    progress_state.frame=int(value)
+                    case 'frame':
+                        progress_state.frame=int(value)
 
-                case 'fps':
-                    progress_state.fps=float(value)
+                    case 'fps':
+                        progress_state.fps=float(value)
 
-                case 'total_size':
-                    progress_state.total_size=int(value)
+                    case 'total_size':
+                        progress_state.total_size=int(value)
 
-                case 'out_time_ms':
-                    progress_state.out_time_ms=int(value)
-                    progress_state.out_time_s=float(int(value)/1000000)
+                    case 'out_time_ms':
+                        progress_state.out_time_ms=int(value)
+                        progress_state.out_time_s=float(int(value)/1000000)
 
-                case 'speed':
-                    progress_state.speed=value
-                    progress_state.speed_f=float(value.strip()[:-1])
-    except:
-        progress_state.progress = 'force_down'
-        result.terminate()
-        bar.join()
-        raise
+                    case 'speed':
+                        progress_state.speed=value
+                        progress_state.speed_f=float(value.strip()[:-1])
+                    case "bitrate" | "out_time_us" | "out_time" | "dup_frames" | "drop_frames" | "stream_0_0_q":
+                        pass
+                    case _:
+                        stderr_buffer.write(line)
+        
+        except ValueError:
+            continue
+
+        except:
+            progress_state.progress = 'force_down'
+            result.terminate()
+            print('\a')
+            bar.join()
+            raise
 
     result.wait()
+    progress_state.return_code=result.returncode
+    progress_state.progress = 'end'
+    if result.returncode !=0:
+        progress_state.progress = 'force_down'
     bar.join()
 
-    progress_state.return_code=result.returncode
 
     if result.returncode !=0:
-        print(result.stderr.read())
+        print(stderr_buffer.getvalue(),file=sys.stderr)
     return result.returncode == 0
 
 def get_video_track_id(path: Path) -> int | None:
