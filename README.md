@@ -324,7 +324,7 @@ video-archive-converter ~/Videos --notification
 | Resolution   | 720p            |
 | Pixel Format | yuv420p         |
 | Preset       | slow (default)  |
-| CRF          | 20 (default)    |
+| CRF          | 22 (default)    |
 
 ---
 
