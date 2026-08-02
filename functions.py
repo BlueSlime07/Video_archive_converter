@@ -133,8 +133,7 @@ def progress_bar(full_time:float|None)->None:
         full_time: Total duration of the video in seconds.
     """
     units = ('KB','MB','GB','TB')
-    test = {'/':'-','-':'\\','\\':'|','|':'/'}
-    first = '/'
+    
     if full_time is not None and full_time > 0:
         try:
             runner=0
@@ -143,29 +142,28 @@ def progress_bar(full_time:float|None)->None:
                 last_down = 2
                 print('\n\n\033[?25l',end='\033[2A')
                 while runner<2 and progress_state.progress != "force_down":
-                        if runner>0:
-                            progress_state.out_time_ms = full_time *1_000_000
-                            progress_state.out_time_s = full_time
-                        fill = int(progress_state.out_time_s / full_time * PROGRESS_BAR_WIDTH)
-                        print("\r\033[k Encoding: ["+fill*'█'+(PROGRESS_BAR_WIDTH - fill)*'░'+f"]  {int(progress_state.out_time_s/full_time*100):>3d}%  ⚡ {progress_state.fps:<8.2f} fps │  {progress_state.speed_f:<4.2f}x    {first}",end='\033[B')
-                        size = progress_state.total_size
-                        n = 0
-                        size =round(size / 1024, 1)
-                        while size>1024:
-                            n+=1
-                            size = round(size / 1024, 1)
+                    if runner>0:
+                        progress_state.out_time_ms = full_time *1_000_000
+                        progress_state.out_time_s = full_time
+                    fill = int(progress_state.out_time_s / full_time * PROGRESS_BAR_WIDTH)
+                    print("\r\033[k Encoding: ["+fill*'█'+(PROGRESS_BAR_WIDTH - fill)*'░'+f"]  {int(progress_state.out_time_s/full_time*100):>3d}%  ⚡ {progress_state.fps:<8.2f} fps │  {progress_state.speed_f:<4.2f}x",end='\033[B')
+                    size = progress_state.total_size
+                    n = 0
+                    size =round(size / 1024, 1)
+                    while size>1024:
+                        n+=1
+                        size = round(size / 1024, 1)
 
-                        if progress_state.speed_f > 0:
-                            ETA_s = int((full_time-progress_state.out_time_s)//progress_state.speed_f)
-                        else:
-                            ETA_s = 359999
-                        if ETA_s <0:ETA_s=0
+                    if progress_state.speed_f > 0:
+                        ETA_s = int((full_time-progress_state.out_time_s)//progress_state.speed_f)
+                    else:
+                        ETA_s = 359999
+                    if ETA_s <0:ETA_s=0
 
-                        print(f"\r\033[k Elapsed: {int(progress_state.out_time_s)//3600:02d}:{int(progress_state.out_time_s)//60%60:02d}:{int(progress_state.out_time_s)%60:02d}  │  ETA: {ETA_s//3600:02d}:{ETA_s//60%60:02d}:{ETA_s%60:02d}  │  Frames: {progress_state.frame:<6,d}  │  Size: {size:<6.1f} {units[n]}",end='\033[A',flush=True)
-                        first = test[first]
-                        time.sleep(0.1)
-                        if progress_state.progress == 'end':
-                            runner+=1
+                    print(f"\r\033[k Elapsed: {int(progress_state.out_time_s)//3600:02d}:{int(progress_state.out_time_s)//60%60:02d}:{int(progress_state.out_time_s)%60:02d}  │  ETA: {ETA_s//3600:02d}:{ETA_s//60%60:02d}:{ETA_s%60:02d}  │  Frames: {progress_state.frame:<6,d}  │  Size: {size:<6.1f} {units[n]}",end='\033[A',flush=True)
+                    time.sleep(0.1)
+                    if progress_state.progress == 'end':
+                        runner+=1
             else:
                 ###   COMPACT
                 last_down = 8
@@ -386,9 +384,8 @@ def encode_video(input_file: Path, tmp_file: Path) -> bool:
 
     result.wait()
     progress_state.return_code=result.returncode
-    progress_state.progress = 'end'
-    if result.returncode !=0:
-        progress_state.progress = 'force_down'
+    progress_state.progress = 'end' if result.returncode == 0 else 'force_down'
+
     bar.join()
 
 
