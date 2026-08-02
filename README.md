@@ -1,6 +1,8 @@
 # Video Archive Converter
 
-A simple, predictable, and reliable video archive converter for Linux.
+Video Archive Converter is a cross-platform command-line tool that converts video collections into space-efficient H.264 archives while preserving audio tracks, subtitles, attachments, and stream metadata.
+
+Designed for long-running conversions with automatic resume support and optimized for media servers such as Jellyfin.
 
 Video Archive Converter recursively scans a directory, converts supported videos to **H.264 720p** using FFmpeg, and rebuilds the final container while preserving non-video streams whenever possible.
 
@@ -17,6 +19,9 @@ The project is designed for building standardized video archives suitable for me
 * Encodes video using **H.264 (libx264)**
 * Resizes video to **720p**
 * CRF-based encoding
+* Real-time encoding progress bar with FPS, speed, elapsed time, ETA, output size and frame count.
+* Automatically adapts to small terminals (e.g. Termux) with a compact progress view.
+* Gracefully falls back when video duration is unavailable.
 * Preserves:
 
   * Audio tracks
@@ -30,6 +35,12 @@ The project is designed for building standardized video archives suitable for me
 * Displays conversion progress
 * Reports failed files at the end
 * Optional audible notification when processing finishes
+* Automatic resume after interruption
+* JSON-based state file
+* Built-in live progress display
+* Cross-platform (Linux / Windows)
+* Optional completion notification
+* Custom output directory
 
 ---
 
@@ -86,6 +97,14 @@ becomes
 ```
 Movies.fs/
 ```
+or
+```
+video_converter Movies --output /mnt/archive
+```
+become
+```
+/mnt/archive
+```
 
 The suffix `.fs` stands for **For Server**.
 
@@ -102,13 +121,33 @@ The original directory structure is preserved.
 | `-f`, `--force-mkv`    | Convert unsupported containers to MKV                      |
 | `-i`, `--in-place`     | Replace original files after successful conversion         |
 | `-r`, `--refresh`      | Refresh the state file                                     |
-|`-r`,  `--notification` | Play a terminal bell notification when processing finishes |
+| `-b`,  `--notification`| Play a terminal bell notification when processing finishes |
+
+---
+
+## Progress Display
+
+Video Archive Converter replaces FFmpeg's default progress output with a cleaner
+real-time interface showing:
+
+- Encoding progress
+- FPS
+- Encoding speed
+- Elapsed time
+- Estimated remaining time (ETA)
+- Encoded frame count
+- Output file size
+
+When the source duration is unavailable, the program automatically switches to
+an alternative display that still reports all available information.
 
 ---
 
 ## State File
 
 The converter stores its progress in a UTF-8 encoded JSON state file inside the output directory.
+
+If the conversion is interrupted, the program resumes from the last successful file on the next run.
 
 This allows interrupted conversions to continue without reprocessing files that have already been completed.
 
@@ -121,6 +160,8 @@ On startup the converter automatically:
 
 The `--refresh` option synchronizes the state file with the current contents of the input directory.
 
+---
+
 ## Requirements
 
 * Python 3.11+
@@ -128,6 +169,8 @@ The `--refresh` option synchronizes the state file with the current contents of 
 * FFprobe
 * MKVToolNix
 * GPAC (MP4Box)
+
+  ---
 
 ### Debian
 
@@ -236,6 +279,10 @@ Convert an entire directory:
 
 ```bash
 video-archive-converter /path/to/Movies
+```
+Save converted files into a custom directory:
+```bash
+video-archive-converter Movies -o <directory>
 ```
 
 Convert unsupported containers to MKV:
