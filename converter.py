@@ -122,6 +122,8 @@ Requirements:
 Examples:
     {APP_NAME} Movies
 
+    {APP_NAME} Movies -o <output_directory>
+
     {APP_NAME} Movies --force-mkv
 
     {APP_NAME} Movies --no-copy
@@ -129,7 +131,10 @@ Examples:
     {APP_NAME} Movies --in-place
 
     {APP_NAME} Movies --refresh
+
     {APP_NAME} Movies --notification
+
+Also see: https://github.com/BlueSlime07/Video_archive_converter
 """)
         sys.exit(0)
     input_dir = Path(sys.argv[1]).resolve()
@@ -192,10 +197,6 @@ Examples:
     state_file = state_dir / "state.json"
     state_file_temp = state_dir / "state_tmp.json"
 
-    if flag_control.JUST_REFRESH:
-        st.state_refresh(state_file,state_file_temp,input_dir)
-        exit(0)
-
     print_title("Checking for state file...")
 
     result = st.state_fix(state_file,state_file_temp)
@@ -247,6 +248,10 @@ Examples:
                                 videos,
                                 other_files,
                                 )
+
+    if flag_control.JUST_REFRESH:
+        sys.exit(0)
+    
 
     for index, video in enumerate(videos, start=1):
 
