@@ -1,7 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/bash
 set -euo pipefail
 
-VERSION="1.0.1"
+VERSION="1.1.0"
 PKG="video-archive-converter_${VERSION}_all_termux.deb"
 
 trap 'rm -f "$PKG"' EXIT
